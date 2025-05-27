@@ -24,6 +24,11 @@ func ProcessCase(sfCase model.SalesforceCase) CaseResult {
 		log.Printf("[WARN] Low confidence: %.2f", confidence)
 		return CaseResult{Resolved: false, Reason: "Low AI confidence", Action: "Manual review required"}
 	}
+	// Fraud detection: If AI flags as fraud, close the case
+	if aiResp.Action == "Close as fraud" {
+		integration.PatchSalesforceCase(sfCase.Id, aiResp.Reason)
+		return CaseResult{Resolved: true, Reason: aiResp.Reason, Action: aiResp.Action}
+	}
 	if aiResp.Resolved {
 		integration.PatchSalesforceCase(sfCase.Id, aiResp.Reason)
 	}
@@ -36,5 +41,7 @@ func ProcessCase(sfCase model.SalesforceCase) CaseResult {
 }
 
 func BuildPrompt(sfCase model.SalesforceCase) string {
-	return "Case Subject: " + sfCase.Subject + "\nDetails: " + sfCase.Details + "\nStatus: " + sfCase.Status + "\nPlease determine if this case is resolved and provide a reason."
+	prompt := "Case Subject: " + sfCase.Subject + "\nDetails: " + sfCase.Details + "\nStatus: " + sfCase.Status + "\n"
+	prompt += "If this is a fraud or spam email, or the content does not make sense, respond with Action: 'Close as fraud' and provide a reason. Otherwise, determine if this case is resolved and provide a reason."
+	return prompt
 }
